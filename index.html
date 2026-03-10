@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+    <html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#007bff" />
+    <meta name="description" content="Find nearest pediatricians and clinics near you - works offline too!" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PediLocator" />
+    <title>Pediatrician Locator</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json" />
+    <!-- iOS Web App Icon -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23007bff' width='180' height='180'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='90' fill='white' font-family='Arial'>🏥</text></svg>" />
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.0/dist/MarkerCluster.Default.css" />
+
+    <!-- custom css -->
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    
+<!-- top search bar -->
+<div class="topbar">
+    <div class="logo">Pediatrician Locator</div>
+    <!-- Offline Indicator -->
+    <div id="offline-indicator" style="display:none; position:absolute; left:50%; transform:translateX(-50%); background:#ff9800; color:white; padding:4px 12px; border-radius:4px; font-size:12px; font-weight:500; white-space:nowrap;">
+        📵 Offline Mode
+    </div>
+    <div class="search-container">
+        <input id="address-input" type="text" placeholder="Search hospitals/clinics or addresses, e.g., 'Gen..'" />
+        <button id="clear-search" class="clear-btn" style="display:none;" title="Clear search">×</button>
+        <div class="search-suggestions" id="search-suggestions"></div>
+        <button id="search-address" class="search-btn" title="Search for clinics or addresses">🔍</button>
+    </div>
+    <button id="get-location-btn" class="get-location-btn" title="Get your current location">📡 Get My Location</button>
+</div>
+
+<!-- left sidebar (collapsed) -->
+<div class="sidebar-collapsed" id="sidebar-collapsed">
+    <button id="toggle-sidebar" class="toggle-btn" title="Open/close menu">☰</button>
+    <button id="favorites-btn" class="sidebar-icon" title="View saved clinics">⭐</button>
+    <button id="recent-btn" class="sidebar-icon" title="View recent searches">🕒</button>
+    <button id="theme-btn" class="sidebar-icon" title="Toggle dark mode">🌙</button>
+</div>
+
+<!-- left sidebar (full) - Simplified for clinic locating -->
+<div class="sidebar" id="left-panel">
+    <div class="panel-content">
+        <!-- Header -->
+        <div class="sidebar-header">
+            <button id="sidebar-close" class="sidebar-close" title="Close menu">×</button>
+            <h3>🏥 Find Nearest Clinic</h3>
+            <p class="subtitle">Quick access to pediatricians near you</p>
+        </div>
+
+        <!-- Current Location Section -->
+        <div class="location-section">
+            <div class="location-status">
+                <span id="location-indicator">📍 Detecting location...</span>
+            </div>
+            <button id="refresh-location" class="refresh-btn" title="Refresh your current location">🔄 Refresh Location</button>
+            <button id="find-nearest-btn" class="find-nearest-btn" title="Find and navigate to the nearest clinic">⭐ Find Nearest</button>
+        </div>
+
+        <!-- Filters Section (Collapsible) -->
+        <div class="filters-section">
+            <div class="filter-header" onclick="toggleFilterPanel()">
+                <span>🔍 Filters</span>
+                <span class="filter-toggle-icon">▼</span>
+            </div>
+            <div id="filter-panel" class="filter-panel" style="display:none;">
+                <!-- Specialization Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">Specialization</label>
+                    <select id="specialization-filter" class="filter-select">
+                        <option value="">All Clinics</option>
+                        <option value="general">General Pediatrics</option>
+                        <option value="emergency">Emergency Care</option>
+                        <option value="vaccination">Vaccination</option>
+                        <option value="growth">Growth & Development</option>
+                        <option value="neonatal">Neonatal Care</option>
+                    </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="filter-group">
+                    <label style="display:block; margin-bottom:6px; font-weight:500; font-size:13px;">Status</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:4px;">
+                        <input type="checkbox" id="filter-open-only" class="filter-check">
+                        Show only open clinics
+                    </label>
+                </div>
+
+                <!-- Map Layers (inside filter panel) -->
+                <div class="filter-group">
+                    <label class="filter-label">Map Type</label>
+                    <div class="layers-inline" style="display:flex; gap:4px;">
+                        <button id="layer-2d" class="layer-btn active" title="Standard 2D map view">2D</button>
+                        <button id="layer-satellite" class="layer-btn" title="Satellite/aerial map view">Satellite</button>
+                        <button id="layer-terrain" class="layer-btn" title="Terrain map with elevation">Terrain</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Availability Legend -->
+            <div class="availability-legend" style="margin-top:8px; padding-top:6px; border-top:1px solid #eee;">
+                <small style="display:block; font-weight:500; margin-bottom:4px;">Availability Status</small>
+                <div style="display:flex; gap:8px; align-items:center; font-size:11px;">
+                    <div style="display:flex; gap:4px; align-items:center;"><span style="width:10px;height:10px;border-radius:50%;background:#28a745;display:inline-block;border:1.5px solid #fff;"></span><small>Open</small></div>
+                    <div style="display:flex; gap:4px; align-items:center;"><span style="width:10px;height:10px;border-radius:50%;background:#d9534f;display:inline-block;border:1.5px solid #fff;"></span><small>Closed</small></div>
+                    <div style="display:flex; gap:4px; align-items:center;"><span style="width:10px;height:10px;border-radius:50%;background:#ffb347;display:inline-block;border:1.5px solid #fff;"></span><small>Hours not listed</small></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="theme-section">
+            <div class="theme-label">Appearance</div>
+            <div class="theme-buttons">
+                <button id="theme-light" class="theme-btn" title="Use light mode">☀️ Light</button>
+                <button id="theme-dark" class="theme-btn" title="Use dark mode">🌙 Dark</button>
+            </div>
+        </div>
+
+        <!-- Nearby Pediatricians List -->
+        <div class="pedi-list-section">
+            <h4>🏥 Nearby Clinics</h4>
+            <div id="pedi-list" class="pedi-list">
+                <!-- populated dynamically -->
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button id="about-btn" class="about-btn" title="About this project">ℹ️ About Me</button>
+        </div>
+    </div>
+</div>
+
+    <!-- map -->
+    <div id="map">
+        <div id="loading">Loading map...</div>
+    </div>
+
+    <!-- Notification container -->
+    <div id="notification-container" class="notification-container"></div>
+
+    <!-- Manual Location Fallback Modal (if GPS fails) -->
+    <div id="manual-location-modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h3>📍 Enter Your Location</h3>
+            <p>GPS is taking longer than expected. Type any of these:</p>
+            
+            <input id="manual-location-input" type="text" placeholder="E.g.: VSM 1 Block 12, San Isidro, Dadiangas, Mabuhay Road, BPI Building, Tambler, Polo, LC, Kalumpang, Cawit, or ANY street/subdivision/barangay" />
+            <div id="manual-location-suggestions" class="autocomplete-dropdown" style="max-height: 250px; overflow-y: auto;"></div>
+            
+            <div style="font-size: 12px; color: #999; margin-top: 10px;">
+                💡 <strong>Accepts for ALL areas of General Santos City:</strong><br/>
+                • Urban/Rural Areas: Any barangay (24 total)<br/>
+                • Subdivisions: VSM, Tierra Florida, Sarangani Heights, etc.<br/>
+                • Streets & Roads: Any street/avenue in the city<br/>
+                • Landmarks: Buildings, churches, schools, markets, businesses<br/>
+                • Block/Lot: Any block/lot reference (e.g., "Block 12 Lot 11")<br/>
+                • House Numbers: Any house number + street combo<br/>
+                We'll keep trying for GPS in the background meanwhile.
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button id="use-manual-location-btn" class="btn-primary" style="flex: 1;">Search Location</button>
+                <button id="skip-manual-location-btn" class="btn-secondary" style="flex: 1;">Keep Waiting</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Me Modal -->
+    <div id="about-modal" class="modal" style="display:none;">
+        <div class="modal-content about-modal-content">
+            <div class="about-modal-header">
+                <h3>About Me</h3>
+                <button id="about-close" class="modal-close" title="Close">×</button>
+            </div>
+            <div class="about-story">
+                <h4>ℹ️ The Story</h4>
+                <p>Pediatrician Locator Website started as a simple idea to help locate the nearest pediatricians from the user's location.</p>
+                <p>Google Maps can already locate pediatricians, but this website aims to make the experience easier for parents or older people who have difficulty using maps. Once the system gets their location, it automatically pinpoints where they are and finds the nearest clinic or hospital.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- info panel (right, slide-in) -->
+    <aside id="info-panel" class="right-panel">
+        <div class="panel-content">
+            <h4>Route & Info</h4>
+            <div id="route-summary">Waiting for location...</div>
+            
+            <!-- Emergency Call Button -->
+            <div id="emergency-call-section" style="display:none; margin-bottom:15px;">
+                <button id="emergency-call-btn" style="width:100%; padding:12px; background:#dc3545; color:white; border:none; border-radius:6px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(220,53,69,0.3); transition:all 0.2s;">
+                    🆘 EMERGENCY CALL
+                </button>
+                <small style="display:block; text-align:center; color:#666; margin-top:6px;">Direct call to hospital emergency</small>
+            </div>
+
+            <div class="collapsible">
+                <h5 class="collapsible-header">Nearby Landmarks <span class="triangle">▼</span></h5>
+                <ul id="landmark-list" class="collapsible-content"></ul>
+            </div>
+
+            <div class="collapsible">
+                <h5 class="collapsible-header">Directions <span class="triangle">▼</span></h5>
+                <ol id="step-list" class="collapsible-content"></ol>
+            </div>
+
+            <div class="transport-modes">
+                <h5 title="Choose your preferred transport mode">🚗 Transportation</h5>
+                <select id="transport-select" title="Select transportation mode for route planning">
+                    <option value="driving">🚗 Private Car</option>
+                    <option value="walking">🚶 Walking</option>
+                    <option value="cycling">🚴 Bike</option>
+                    <option value="public">🚌 Public Transport</option>
+                    <option value="motorcycle">🏍️ Motorcycle</option>
+                </select>
+                
+                <!-- ETA Display for all transport modes -->
+                <div id="eta-display" style="margin-top:12px; padding:12px; background:#f5f5f5; border-radius:6px; display:none;">
+                    <div style="font-weight:600; font-size:13px; margin-bottom:10px; color:#333;">Estimated Times:</div>
+                    <div id="eta-car" style="padding:6px 0; font-size:12px; border-bottom:1px solid #e0e0e0;"><span style="display:inline-block; width:80px;">🚗 Car:</span> <strong>-</strong></div>
+                    <div id="eta-walk" style="padding:6px 0; font-size:12px; border-bottom:1px solid #e0e0e0;"><span style="display:inline-block; width:80px;">🚶 Walk:</span> <strong>-</strong></div>
+                    <div id="eta-bike" style="padding:6px 0; font-size:12px; border-bottom:1px solid #e0e0e0;"><span style="display:inline-block; width:80px;">🚴 Bike:</span> <strong>-</strong></div>
+                    <div id="eta-public" style="padding:6px 0; font-size:12px; border-bottom:1px solid #e0e0e0;"><span style="display:inline-block; width:80px;">🚌 Transit:</span> <strong>-</strong></div>
+                    <div id="eta-motorcycle" style="padding:6px 0; font-size:12px;"><span style="display:inline-block; width:80px;">🏍️ Bike:</span> <strong>-</strong></div>
+                    <div id="traffic-status" style="margin-top:8px; padding-top:8px; border-top:1px solid #e0e0e0; font-size:11px; color:#666;">
+                        <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#4caf50; margin-right:4px;"></span>
+                        <span>Normal traffic conditions</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="controls">
+                <button id="start-tracking" class="tracking-btn" title="Start real-time GPS tracking and navigation">▶ Start Live Tracking</button>
+                <button id="stop-tracking" style="display:none" class="tracking-btn" title="Stop GPS tracking">⏹ Stop Tracking</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- clinic details panel -->
+    <div id="clinic-panel" class="clinic-panel">
+        <button id="close-clinic" class="close-btn" title="Close clinic details">×</button>
+        <div class="clinic-header">
+            <img id="clinic-image" src="https://cdn-icons-png.flaticon.com/512/3209/3209464.png" alt="Clinic Image">
+            <h2 id="clinic-name"></h2>
+            <div class="rating">★★★★☆ 4.0 (12 reviews)</div>
+            <p>Pediatrician</p>
+        </div>
+        <div class="clinic-tabs">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="reviews">Reviews</button>
+            <button class="tab" data-tab="about">About</button>
+        </div>
+        <div class="clinic-content">
+            <div id="overview" class="tab-content active">
+                <ul class="info-list">
+                    <li><span class="icon">A</span> Address: <span id="clinic-address"></span></li>
+                    <li><span class="icon">T</span> Status: <span id="clinic-status-live">Open until 5 PM</span></li>
+                    <li><span class="icon">W</span> Website: <a id="clinic-website" href="#" target="_blank">Visit</a></li>
+                    <li><span class="icon">P</span> Phone: <a id="clinic-phone" href="tel:">Call</a></li>
+                </ul>
+                <div id="clinic-verification" style="font-size:12px; color:#666; margin:8px 0; padding:8px; background:#f5f5f5; border-radius:4px; display:none;">
+                    <span id="clinic-verification-text"></span>
+                </div>
+                <div class="actions">
+                    <button class="action-btn" id="get-directions" title="Get turn-by-turn directions">Directions</button>
+                    <button class="action-btn" id="save-clinic" title="Save this clinic to favorites">Save</button>
+                    <button class="action-btn" id="report-status-btn" style="background:#ff9800; color:white;" title="Report if this clinic is open or closed">🔔 Report Status</button>
+                    <button class="action-btn" id="share-clinic" title="Share this clinic with others">Share</button>
+                </div>
+            </div>
+            <div id="reviews" class="tab-content">
+                <div class="review">
+                    <strong>John D.</strong> ★★★★☆<br>
+                    Great service, highly recommend!
+                </div>
+                <div class="review">
+                    <strong>Jane S.</strong> ★★★★★<br>
+                    Excellent pediatrician, very caring.
+                </div>
+            </div>
+            <div id="about" class="tab-content">
+                <p>This clinic specializes in pediatric care, offering comprehensive health services for children.</p>
+                <p>Services: Check-ups, vaccinations, emergency care.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Availability Modal -->
+    <div id="report-modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:500px;">
+            <h3>🔔 Report Clinic Availability</h3>
+            <p style="font-size:13px; color:#666;">Help the community by verifying if this clinic is open right now.</p>
+            
+            <div id="report-clinic-name" style="font-weight:600; margin:12px 0; padding:8px; background:#e3f2fd; border-radius:4px;"></div>
+            
+            <div style="margin:12px 0;">
+                <label style="display:block; margin-bottom:8px; font-weight:500;">Is this clinic open right now?</label>
+                <div style="display:flex; gap:8px;">
+                    <button id="report-open-btn" class="btn-primary" style="flex:1; background:#28a745; padding:10px; border:none; color:white; border-radius:4px; cursor:pointer;">✓ Open</button>
+                    <button id="report-closed-btn" class="btn-secondary" style="flex:1; background:#d9534f; padding:10px; border:none; color:white; border-radius:4px; cursor:pointer;">✗ Closed</button>
+                    <button id="report-unsure-btn" class="btn-secondary" style="flex:1; background:#ffb347; padding:10px; border:none; color:white; border-radius:4px; cursor:pointer;">? Unsure</button>
+                </div>
+            </div>
+            
+            <div style="margin:12px 0;">
+                <label style="display:block; margin-bottom:8px; font-weight:500;">Any additional notes? (Optional)</label>
+                <textarea id="report-notes" placeholder="e.g., 'very crowded', 'long wait', 'staff on break'" style="width:100%; height:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;"></textarea>
+            </div>
+            
+            <div style="margin:12px 0;">
+                <label style="display:block; margin-bottom:8px; font-weight:500;">Your name (optional)</label>
+                <input id="report-name" type="text" placeholder="Stay anonymous if you prefer" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;" />
+            </div>
+            
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button id="submit-report-btn" class="btn-primary" style="flex:1; padding:10px; background:#1565c0; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:600;">Submit Report</button>
+                <button id="cancel-report-btn" class="btn-secondary" style="flex:1; padding:10px; background:#ccc; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chatbot Widget (Improved UI & Visibility) -->
+    <div id="chatbot-container" style="position:fixed; bottom:20px; right:20px; z-index:2000; font-family:inherit; pointer-events:auto;">
+        <!-- Floating Chat Button with Better Visibility -->
+        <button id="chatbot-toggle" style="width:62px; height:62px; border-radius:50%; background:linear-gradient(135deg, #1e88e5, #1565c0); color:white; border:2px solid white; font-size:28px; cursor:pointer; box-shadow:0 6px 16px rgba(21, 101, 192, 0.4), inset 0 -2px 4px rgba(0,0,0,0.1); display:flex; align-items:center; justify-content:center; transition:all 0.3s ease; transform:scale(1);" title="Open AI Medical Assistant">
+            <span style="display:inline-block; line-height:1;">💬</span>
+        </button>
+
+        <!-- Chat Window (Improved Layout with proper visibility) -->
+        <div id="chatbot-window" style="position:absolute; bottom:80px; right:0; width:380px; height:520px; background:white; border-radius:14px; box-shadow:0 8px 50px rgba(0,0,0,0.25), 0 0 1px rgba(0,0,0,0.1); display:flex; flex-direction:column; animation:slideUp 0.3s ease-out; visibility:hidden; opacity:0; pointer-events:none; z-index:2001; transition:opacity 0.3s ease, visibility 0.3s ease; right:0px; bottom:80px;">
+            <!-- Chat Header -->
+            <div style="background:linear-gradient(135deg, #1e88e5, #1565c0); color:white; padding:16px 18px; border-radius:14px 14px 0 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; box-shadow:0 2px 8px rgba(21, 101, 192, 0.2);">
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:15px; letter-spacing:0.3px;">🏥 Medical Assistant</div>
+                    <div style="font-size:11px; opacity:0.9; margin-top:2px;">Powered by Gemini AI</div>
+                </div>
+                <button id="chatbot-close" style="background:none; border:none; color:white; font-size:26px; cursor:pointer; padding:4px 8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;" title="Close chat">✕</button>
+            </div>
+
+            <!-- Messages Area -->
+            <div id="chatbot-messages" style="flex:1; overflow-y:auto; padding:16px; background:#f8f9fa; display:flex; flex-direction:column; gap:12px; min-height:300px; scrollbar-width:thin;">
+                <div style="background:#e3f2fd; padding:12px 14px; border-radius:8px; align-self:flex-start; max-width:88%; font-size:13px; color:#1565c0; border-left:4px solid #1565c0; line-height:1.4;">
+                    Hi! I can help with this website's features like GPS/manual location, routes, clinic filtering, reports, offline mode, and admin tools.
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div style="border-top:1px solid #e0e0e0; padding:12px 14px; display:flex; gap:8px; flex-shrink:0; background:white; border-radius:0 0 14px 14px;">
+                <input id="chatbot-input" type="text" placeholder="Ask about this website..." style="flex:1; padding:10px 14px; border:1px solid #ddd; border-radius:6px; font-size:13px; outline:none; transition:all 0.2s ease;" />
+                <button id="chatbot-send" style="background:linear-gradient(135deg, #1e88e5, #1565c0); color:white; border:none; padding:10px 16px; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px; transition:all 0.2s ease;" title="Send message (Enter)">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS (required before app.js) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.0/dist/leaflet.markercluster.js"></script>
+
+    <!-- opening_hours.js - Parse OpenStreetMap opening_hours tags for real-time availability -->
+    <script src="https://unpkg.com/opening_hours/build/opening_hours.min.js"></script>
+
+    <!-- app logic -->
+    <script src="app.js"></script>
+
+    <!-- Service Worker Registration for Offline Mode & PWA -->
+    <script>
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => {
+                        console.log('✓ Service Worker registered successfully:', registration.scope);
+                        
+                        // Check for updates periodically
+                        setInterval(() => {
+                            registration.update();
+                        }, 60000); // Check every minute
+                        
+                        // Listen for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'activated') {
+                                    showNotification('📦 App updated! Please refresh for latest version.', 'info', 5000);
+                                }
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        console.error('✗ Service Worker registration failed:', error);
+                    });
+            });
+
+            // Handle messages from Service Worker
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data.type === 'SYNC_REPORTS') {
+                    console.log('Syncing offline reports...');
+                    syncOfflineReports();
+                }
+            });
+        }
+
+        // Handle online/offline status
+        window.addEventListener('online', () => {
+            document.getElementById('offline-indicator').style.display = 'none';
+            showNotification('🟢 Back online! Syncing data...', 'success', 3000);
+            syncOfflineReports();
+        });
+
+        window.addEventListener('offline', () => {
+            document.getElementById('offline-indicator').style.display = 'block';
+            showNotification('📵 You are offline. Using cached data.', 'warning', 3000);
+        });
+
+        // Check initial online status
+        if (!navigator.onLine) {
+            document.getElementById('offline-indicator').style.display = 'block';
+        }
+
+        /**
+         * Sync any reports that were saved while offline
+         */
+        function syncOfflineReports() {
+            const pendingReports = JSON.parse(localStorage.getItem('pending-reports')) || [];
+            if (pendingReports.length === 0) return;
+
+            pendingReports.forEach((report, index) => {
+                // Submit report when online
+                submitClinicReport(report.clinicId, report.status, report.notes, report.name);
+                pendingReports.splice(index, 1);
+            });
+
+            localStorage.setItem('pending-reports', JSON.stringify(pendingReports));
+            if (pendingReports.length > 0) {
+                showNotification('✓ Synced ' + pendingReports.length + ' offline reports', 'success', 2000);
+            }
+        }
+
+        // Enable PWA install prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            deferredPrompt = e;
+            // Show install button (if you want to create one)
+            const installBtn = document.getElementById('install-btn');
+            if (installBtn) {
+                installBtn.style.display = 'block';
+                installBtn.addEventListener('click', () => {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            showNotification('✓ App installed! You can now use it offline.', 'success', 3000);
+                        }
+                        deferredPrompt = null;
+                    });
+                });
+            }
+        });
+
+        // Listen for app installed
+        window.addEventListener('appinstalled', () => {
+            showNotification('✓ App successfully installed to your device!', 'success', 3000);
+            console.log('PWA was installed');
+        });
+    </script>
+</body>
+</html>
