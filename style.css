@@ -1,4 +1,10 @@
 
+:root {
+    --topbar-height: 56px;
+    --mobile-bottombar-height: 56px;
+    --chatbot-mobile-height: 0px;
+}
+
 body {
     margin: 0;
     font-family: 'Roboto', Arial, sans-serif;
@@ -271,10 +277,10 @@ body.dark-mode .autocomplete-item:hover {
 /* left sidebar (collapsed) */
 .sidebar-collapsed {
     position: fixed;
-    top: 56px;
+    top: var(--topbar-height);
     left: 0;
     width: 50px;
-    height: calc(100vh - 56px);
+    height: calc(100vh - var(--topbar-height));
     height: -webkit-fill-available;
     height: fill-available;
     background: #fff;
@@ -317,10 +323,10 @@ body.dark-mode .autocomplete-item:hover {
 /* left sidebar (full) */
 .sidebar {
     position: fixed;
-    top: 56px;
+    top: var(--topbar-height);
     left: -320px; /* hidden initially */
     width: 320px;
-    height: calc(100vh - 56px);
+    height: calc(100vh - var(--topbar-height));
     height: -webkit-fill-available;
     height: fill-available;
     background: #fff;
@@ -492,6 +498,30 @@ body.dark-mode .sidebar-close:hover {
     background: #e8f0ff;
     border-radius: 4px;
     border-left: 3px solid #1565c0;
+}
+
+.location-accuracy {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #555;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.location-accuracy .accuracy-label {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.location-accuracy .accuracy-value {
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: #dfe9ff;
+    color: #1a237e;
+    font-weight: 600;
+    font-size: 10px;
 }
 
 .refresh-btn,
@@ -876,6 +906,19 @@ body.dark-mode .location-status {
     border-color: #64b5f6;
 }
 
+body.dark-mode .location-accuracy {
+    color: #cfd8dc;
+}
+
+body.dark-mode .location-accuracy .accuracy-label {
+    color: #e3f2fd;
+}
+
+body.dark-mode .location-accuracy .accuracy-value {
+    background: #1b2a4a;
+    color: #bbdefb;
+}
+
 body.dark-mode .pedi-item {
     background: #333;
     border-color: #555;
@@ -999,7 +1042,7 @@ body.dark-mode .search-suggestion-item:hover {
 /* map */
 #map {
     position: absolute;
-    top: 56px;
+    top: var(--topbar-height);
     left: 0;
     right: 0;
     bottom: 0;
@@ -1031,10 +1074,10 @@ body.dark-mode .search-suggestion-item:hover {
 /* right panel (slide-in) */
 .right-panel {
     position: fixed;
-    top: 56px;
+    top: var(--topbar-height);
     right: -340px; /* hidden initially */
     width: 340px;
-    height: calc(100% - 56px);
+    height: calc(100% - var(--topbar-height));
     background: #fff;
     border-left: 1px solid #e0e0e0;
     z-index: 999;
@@ -1151,8 +1194,8 @@ body.dark-mode .search-suggestion-item:hover {
         max-height: 50vh;
     }
     .sidebar-collapsed {
-        top: 56px;
-        height: calc(100vh - 56px);
+        top: var(--topbar-height);
+        height: calc(100vh - var(--topbar-height));
         height: -webkit-fill-available;
         height: fill-available;
     }
@@ -1160,7 +1203,7 @@ body.dark-mode .search-suggestion-item:hover {
         overflow-y: auto;
     }
     #map {
-        top: 56px;
+        top: var(--topbar-height);
         bottom: 0;
     }
     .zoom-controls {
@@ -1546,7 +1589,7 @@ body.dark-mode .pedi-item-btn:hover {
 /* Notification System */
 .notification-container {
     position: fixed;
-    top: 70px;
+    top: calc(var(--topbar-height) + 10px);
     left: 50%;
     transform: translateX(-50%);
     z-index: 2000;
@@ -1676,6 +1719,27 @@ body.dark-mode .modal-content h3 {
     font-size: 14px;
     line-height: 1.5;
     color: #666;
+}
+
+/* Mobile-only bottom action buttons */
+.mobile-panel-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid #d0d0d0;
+    background: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a1a1a;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.mobile-panel-btn:hover {
+    background: #f5f5f5;
 }
 
 body.dark-mode .modal-content p {
@@ -2009,14 +2073,35 @@ body.dark-mode .btn-secondary:hover {
         font-size: 14px;
     }
 
+    .get-location-btn {
+        order: 4;
+        width: 100%;
+        margin-left: 0;
+        border-radius: 12px;
+    }
+
     /* Sidebar adjustments for mobile */
     .sidebar {
         width: 100%;
         max-width: none;
         background: white;
-        z-index: 999;
-        max-height: 60vh;
+        z-index: 1100;
+        left: 0;
+        right: 0;
+        top: auto;
+        bottom: var(--mobile-bottombar-height);
+        height: auto;
+        max-height: 60dvh;
         overflow-y: auto;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 -6px 18px rgba(0,0,0,0.18);
+        pointer-events: none;
+    }
+
+    .sidebar.mobile-open {
+        transform: translateY(0);
+        pointer-events: auto;
     }
 
     .sidebar-collapsed {
@@ -2030,7 +2115,9 @@ body.dark-mode .btn-secondary:hover {
         background: white;
         border-top: 1px solid #e0e0e0;
         justify-content: flex-start;
-        padding: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 8px 10px;
         gap: 8px;
     }
 
@@ -2043,16 +2130,26 @@ body.dark-mode .btn-secondary:hover {
         width: 100%;
         max-width: none;
         right: 0;
-        bottom: 0;
+        left: 0;
+        bottom: var(--mobile-bottombar-height);
         top: auto;
         border-left: none;
         border-top: 1px solid #e0e0e0;
-        max-height: 50vh;
+        max-height: 50dvh;
         overflow-y: auto;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+        box-shadow: 0 -6px 18px rgba(0,0,0,0.18);
     }
 
     .right-panel.collapsed {
         display: none;
+    }
+
+    .right-panel.mobile-open {
+        transform: translateY(0);
+        pointer-events: auto;
     }
 
     /* Clinic panel mobile view */
@@ -2088,27 +2185,44 @@ body.dark-mode .btn-secondary:hover {
 
     /* Adjust chatbot for mobile */
     #chatbot-container {
-        bottom: 10px;
-        right: 10px;
+        bottom: calc(var(--mobile-bottombar-height) + 10px) !important;
+        right: 10px !important;
     }
 
     #chatbot-toggle {
-        width: 50px;
-        height: 50px;
-        font-size: 20px;
+        width: 50px !important;
+        height: 50px !important;
+        font-size: 20px !important;
     }
 
     #chatbot-window {
-        width: 95vw;
-        max-width: 100%;
-        height: 60vh;
-        right: -5vw;
-        bottom: 60px;
+        position: fixed !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: 100% !important;
+        height: 50dvh !important;
+        max-height: 60dvh !important;
+        bottom: calc(var(--mobile-bottombar-height) + 12px) !important;
+        border-radius: 16px 16px 0 0 !important;
+    }
+
+    #chatbot-messages {
+        min-height: 0 !important;
     }
 
     /* Map container full height on mobile */
     #map {
-        height: calc(100vh - 160px);
+        bottom: var(--mobile-bottombar-height);
+        height: auto;
+    }
+
+    body.chatbot-open {
+        --chatbot-mobile-height: 50dvh;
+    }
+
+    body.chatbot-open #map {
+        bottom: calc(var(--mobile-bottombar-height) + var(--chatbot-mobile-height));
     }
 
     /* Prevent zoom on input focus (iOS) */
@@ -2159,6 +2273,10 @@ body.dark-mode .btn-secondary:hover {
         font-size: 14px;
     }
 
+    .mobile-panel-btn {
+        display: inline-flex;
+    }
+
     /* Hide certain elements on very small screens */
     @media (max-width: 480px) {
         #offline-indicator {
@@ -2188,7 +2306,8 @@ body.dark-mode .btn-secondary:hover {
         }
 
         #map {
-            height: calc(100vh - 130px);
+            bottom: var(--mobile-bottombar-height);
+            height: auto;
         }
 
         .pedi-list-item .distance {
