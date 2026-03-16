@@ -2572,7 +2572,7 @@ function handlePosition(position) {
 }
 
 /**
- * GPS/NETWORK LIVE TRACKING: 
+ * GPS LIVE TRACKING: 
  * Continuously watch user location and automatically update route/nearby clinics as they move
  * Fallback to manual location if accurate signal takes too long
  */
@@ -2601,7 +2601,6 @@ function startAutoGeolocation() {
     let bestAccuracy = Infinity;
     gpsStartTime = Date.now();
     let manualLocationTimeout = null;
-    let networkFallbackTimeout = null;
 
     const options = {
         enableHighAccuracy: true,   // Force real GPS (not IP)
@@ -2623,38 +2622,6 @@ function startAutoGeolocation() {
             showNotification('📍 GPS taking longer than expected. Enter your address to search nearby clinics...', 'info', 4000);
         }
     }, 20000);
-
-    // If GPS is slow on desktop, try a quick network-based fix to improve success rate
-    networkFallbackTimeout = setTimeout(() => {
-        if (gpsLockedIn || manualLocationUsed) return;
-        try {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    if (gpsLockedIn || manualLocationUsed) return;
-                    const { latitude, longitude, accuracy } = pos.coords;
-                    console.log(`📶 Network fallback location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accuracy.toFixed(0)}m)`);
-                    locationMode = 'network';
-                    userLocationAccuracy = accuracy;
-                    lastKnownPosition = { lat: latitude, lon: longitude };
-                    reverseGeocode(latitude, longitude).then(address => {
-                        userAddress = address;
-                        updateUIAfterLocation(latitude, longitude);
-                    });
-                    if (!window.mapCenteredOnUser) {
-                        map.setView([latitude, longitude], 14);
-                        window.mapCenteredOnUser = true;
-                    }
-                    showNotification('📶 Using network-based location while GPS locks...', 'info', 3000);
-                },
-                () => {
-                    // ignore - GPS may still lock
-                },
-                { enableHighAccuracy: false, maximumAge: 30000, timeout: 12000 }
-            );
-        } catch (e) {
-            // ignore
-        }
-    }, 8000);
 
     // Start continuous live tracking
     liveTrackingWatchId = navigator.geolocation.watchPosition(
@@ -2680,7 +2647,7 @@ function startAutoGeolocation() {
 
             // Warn if accuracy is poor (network-based or weak GPS signal)
             if (!gpsLocked && accuracy > 100 && accuracy <= 500) {
-                console.warn(`⚠️ Poor GPS accuracy: ${accuracy.toFixed(0)}m - This might be network-based location`);
+                console.warn(`⚠️ Poor GPS accuracy: ${accuracy.toFixed(0)}m - Weak GPS signal`);
                 const locIndicator = document.getElementById('location-indicator');
                 if (locIndicator) {
                     locIndicator.innerHTML = `📍 ⚠️ Poor GPS signal (${accuracy.toFixed(0)}m) - Please go outdoors`;
@@ -2688,23 +2655,19 @@ function startAutoGeolocation() {
             }
 
             const isGpsAccuracy = accuracy <= GPS_LOCK_ACCURACY_M;
-            const isNetworkAccuracy = accuracy > GPS_LOCK_ACCURACY_M && accuracy <= NETWORK_LOCATION_MAX_ACCURACY_M;
 
-            // Lock on GPS or network once accuracy is reasonable
-            if (!gpsLocked && (isGpsAccuracy || isNetworkAccuracy)) {
+            // Lock only on true GPS accuracy
+            if (!gpsLocked && isGpsAccuracy) {
                 gpsLocked = true;
                 gpsLockedIn = true;
-                locationMode = isGpsAccuracy ? 'gps' : 'network';
+                locationMode = 'gps';
                 
                 // Clear the manual location timeout since we got GPS lock
                 if (manualLocationTimeout) clearTimeout(manualLocationTimeout);
-                if (networkFallbackTimeout) clearTimeout(networkFallbackTimeout);
                 
                 // Determine accuracy level
                 let accuracyLevel = 'Excellent GPS';
-                if (isNetworkAccuracy) {
-                    accuracyLevel = 'Network Location (Approximate)';
-                } else if (accuracy > 50) {
+                if (accuracy > 50) {
                     accuracyLevel = 'WiFi-Assisted GPS (Good)';
                 }
                 
@@ -2764,8 +2727,7 @@ function startAutoGeolocation() {
 
                 // Update UI indicator
                 if (locIndicator) {
-                    const label = locationMode === 'network' ? 'Approx. Network Location' : 'Live Tracking';
-                    locIndicator.innerHTML = `📍 <strong>${label}</strong> (±${accuracy.toFixed(0)}m)`;
+                    locIndicator.innerHTML = `📍 <strong>Live Tracking</strong> (±${accuracy.toFixed(0)}m)`;
                 }
             }
         },
@@ -2845,6 +2807,64 @@ function updateUIAfterLocation(lat, lon) {
     }
 }
 
+function acquireHighAccuracyPosition({ maxWaitMs = 22000, targetAccuracy = GPS_LOCK_ACCURACY_M } = {}) {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject({ code: 1, message: 'Geolocation not supported' });
+            return;
+        }
+
+        let bestPosition = null;
+        let lastError = null;
+        let watchId = null;
+
+        const cleanup = () => {
+            if (watchId) {
+                try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
+                watchId = null;
+            }
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+
+        const timeoutId = setTimeout(() => {
+            cleanup();
+            if (bestPosition && bestPosition.coords && bestPosition.coords.accuracy <= targetAccuracy) {
+                resolve(bestPosition);
+                return;
+            }
+            const fallbackError = lastError || { code: 3, message: 'GPS timeout' };
+            reject(fallbackError);
+        }, maxWaitMs);
+
+        const onSuccess = (pos) => {
+            const acc = pos?.coords?.accuracy;
+            if (Number.isFinite(acc)) {
+                if (!bestPosition || acc < bestPosition.coords.accuracy) {
+                    bestPosition = pos;
+                }
+                if (acc <= targetAccuracy) {
+                    cleanup();
+                    resolve(pos);
+                }
+            }
+        };
+
+        const onError = (err) => {
+            lastError = err;
+            if (err && (err.code === 1 || err.PERMISSION_DENIED === err.code)) {
+                cleanup();
+                reject(err);
+            }
+        };
+
+        watchId = navigator.geolocation.watchPosition(
+            onSuccess,
+            onError,
+            { enableHighAccuracy: true, maximumAge: 0 }
+        );
+    });
+}
+
 function getAccurateLocation() {
     if (!ensureGeolocationAvailable()) return;
 
@@ -2859,48 +2879,59 @@ function getAccurateLocation() {
 
     showNotification('📍 Acquiring GPS signal... (this takes 10-30 seconds outdoors)', 'info', 5000);
 
-    // Prefer GPS (enableHighAccuracy) but allow network-based fallback if GPS is weak
+    // Prefer true GPS (enableHighAccuracy) only
     // Google Maps uses: enableHighAccuracy=true, maximumAge=0, and long timeout
-    const options = {
-        enableHighAccuracy: true,    // Force GPS, not IP geolocation
-        maximumAge: 0,                // Never use cached location
-        timeout: 20000                // Give GPS 20 seconds to lock on satellites, then show manual option
+    let retryCount = 0;
+    const maxRetries = 1;
+    const retryDelayMs = 1200;
+
+    const attemptGpsLock = () => {
+        acquireHighAccuracyPosition({ maxWaitMs: 22000, targetAccuracy: GPS_LOCK_ACCURACY_M })
+            .then(handleSuccess)
+            .catch(handleError);
     };
 
-    const fallbackOptions = {
-        enableHighAccuracy: false,
-        maximumAge: 15000,
-        timeout: 15000
+    const scheduleGpsRetry = (reasonText) => {
+        if (retryCount >= maxRetries) return false;
+        retryCount += 1;
+        showManualLocationModal();
+        showNotification(reasonText || 'GPS failed to lock. Retrying in the background...', 'warning', 3500);
+        if (getLocBtn) {
+            getLocBtn.textContent = '⏳ Retrying GPS...';
+            getLocBtn.disabled = true;
+        }
+        setTimeout(() => {
+            attemptGpsLock();
+        }, retryDelayMs);
+        return true;
     };
 
     const handleSuccess = (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         
         const isGpsAccuracy = accuracy <= GPS_LOCK_ACCURACY_M;
-        const isNetworkAccuracy = accuracy > GPS_LOCK_ACCURACY_M && accuracy <= NETWORK_LOCATION_MAX_ACCURACY_M;
 
         // If accuracy is too poor, reject it.
-        if (!isGpsAccuracy && !isNetworkAccuracy) {
+        if (!isGpsAccuracy) {
             console.log(`⚠️ Rejected: Accuracy ${accuracy}m = too imprecise`);
-            
-            if (getLocBtn) {
-                getLocBtn.textContent = '📡 Get My Location';
-                getLocBtn.disabled = false;
+            const retried = scheduleGpsRetry('📡 GPS accuracy too low. Retrying while manual location is available...');
+            if (!retried) {
+                if (getLocBtn) {
+                    getLocBtn.textContent = '📡 Get My Location';
+                    getLocBtn.disabled = false;
+                }
+                showNotification('❌ Location accuracy too low.\n\n✅ Tips:\n1. Go outdoors to open area\n2. Clear view of sky (no tall buildings)\n3. Wait 20-30 seconds for better lock\n4. Try again or use manual location', 'error', 6000);
             }
-            
-            showNotification('❌ Location accuracy too low.\n\n✅ Tips:\n1. Go outdoors to open area\n2. Clear view of sky (no tall buildings)\n3. Wait 20-30 seconds for better lock\n4. Try again or use manual location', 'error', 6000);
             return;
         }
         
         userLocationAccuracy = accuracy;
         gpsLockedIn = true;
-        locationMode = isGpsAccuracy ? 'gps' : 'network';
+        locationMode = 'gps';
         
         // Accuracy: <30m = Real GPS | 30-100m = WiFi+GPS
         let accuracyStatus = '✅ GPS (Highly Accurate)';
-        if (isNetworkAccuracy) {
-            accuracyStatus = '📶 Network Location (Approximate)';
-        } else if (accuracy > 30) {
+        if (accuracy > 30) {
             accuracyStatus = '📶 WiFi+GPS (Good)';
         }
         
@@ -2913,6 +2944,7 @@ function getAccurateLocation() {
 
         requestAutoRouteNearest(latitude, longitude);
 
+        hideManualLocationModal();
         showNotification(`✅ Location Found! ${accuracyStatus}\n±${accuracy.toFixed(0)}m accuracy`, 'success', 4000);
         
         console.log(`📍 Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accuracy.toFixed(0)}m)`);
@@ -2923,17 +2955,12 @@ function getAccurateLocation() {
         }
     };
 
-    const handleError = (error, triedFallback = false) => {
+    const handleError = (error) => {
         console.error('Geolocation error code:', error.code, error.message);
 
-        if (!triedFallback && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
-            showNotification('📶 Trying network-based location for better success...', 'info', 2500);
-            navigator.geolocation.getCurrentPosition(
-                handleSuccess,
-                (fallbackError) => handleError(fallbackError, true),
-                fallbackOptions
-            );
-            return;
+        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+            const retried = scheduleGpsRetry('📡 GPS failed to lock. Retrying while manual location is available...');
+            if (retried) return;
         }
         
         let errorMsg = '';
@@ -2966,6 +2993,7 @@ function getAccurateLocation() {
         }
         
         showNotification(errorTitle + errorMsg, 'error', 5000);
+        showManualLocationModal();
         
         // Fallback to GenSan center
         const lat = 6.1164;
@@ -2980,11 +3008,7 @@ function getAccurateLocation() {
         }
     };
 
-    navigator.geolocation.getCurrentPosition(
-        handleSuccess,
-        (error) => handleError(error, false),
-        options
-    );
+    attemptGpsLock();
 }
 
 // ============================================================================
