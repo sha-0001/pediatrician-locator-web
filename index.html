@@ -49,6 +49,8 @@
     <button id="favorites-btn" class="sidebar-icon" title="View saved clinics">⭐</button>
     <button id="recent-btn" class="sidebar-icon" title="View recent searches">🕒</button>
     <button id="theme-btn" class="sidebar-icon" title="Toggle dark mode">🌙</button>
+    <button id="mobile-route-info-btn" class="mobile-panel-btn" title="Open route and info panel">🧭 Route &amp; Info</button>
+    <button id="mobile-live-tracking-btn" class="mobile-panel-btn" title="Open live tracking panel">📍 Live Tracking</button>
 </div>
 
 <!-- left sidebar (full) - Simplified for clinic locating -->
@@ -65,6 +67,7 @@
         <div class="location-section">
             <div class="location-status">
                 <span id="location-indicator">📍 Detecting location...</span>
+                <div id="location-accuracy" class="location-accuracy">Accuracy: —</div>
             </div>
             <button id="refresh-location" class="refresh-btn" title="Refresh your current location">🔄 Refresh Location</button>
             <button id="find-nearest-btn" class="find-nearest-btn" title="Find and navigate to the nearest clinic">⭐ Find Nearest</button>
@@ -96,6 +99,15 @@
                     <label style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:4px;">
                         <input type="checkbox" id="filter-open-only" class="filter-check">
                         Show only open clinics
+                    </label>
+                </div>
+
+                <!-- Cinematic Zoom Toggle -->
+                <div class="filter-group">
+                    <label style="display:block; margin-bottom:6px; font-weight:500; font-size:13px;">Map Animation</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:4px;">
+                        <input type="checkbox" id="cinematic-zoom-toggle" class="filter-check" checked>
+                        Cinematic zoom to nearest
                     </label>
                 </div>
 
@@ -168,12 +180,13 @@
                 • Landmarks: Buildings, churches, schools, markets, businesses<br/>
                 • Block/Lot: Any block/lot reference (e.g., "Block 12 Lot 11")<br/>
                 • House Numbers: Any house number + street combo<br/>
-                We'll keep trying for GPS in the background meanwhile.
+                You can switch back to GPS anytime using "Get My Location".
             </div>
             
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button id="use-manual-location-btn" class="btn-primary" style="flex: 1;">Search Location</button>
-                <button id="skip-manual-location-btn" class="btn-secondary" style="flex: 1;">Keep Waiting</button>
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button id="use-manual-location-btn" class="btn-primary" style="flex: 1; min-width: 140px;">Search Location</button>
+                <button id="switch-to-gps-btn" class="btn-secondary" style="flex: 1; min-width: 140px;">Switch to GPS</button>
+                <button id="skip-manual-location-btn" class="btn-secondary" style="flex: 1; min-width: 140px;">Keep Waiting</button>
             </div>
         </div>
     </div>
