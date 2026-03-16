@@ -165,6 +165,7 @@ let gpsStartTime = null; // Track when GPS acquisition started
 let locationMode = 'unknown'; // 'gps' | 'network' | 'manual' | 'unknown'
 let ignorePositionJump = false; // Allow first GPS fix after switching modes
 let cinematicZoomEnabled = true;
+let pendingAutoRouteLocation = null; // { lat, lon } when clinics not loaded yet
 
 const GPS_LOCK_ACCURACY_M = 100; // Real GPS typically < 100m
 const NETWORK_LOCATION_MAX_ACCURACY_M = 1200; // Allow WiFi/cell-based location
@@ -1290,6 +1291,7 @@ function fetchPOIs() {
         
         renderPOIMarkers();
         if (lastKnownPosition) updatePediatriciansNearby(lastKnownPosition.lat, lastKnownPosition.lon);
+        flushPendingAutoRoute();
         showNotification(`✅ Loaded ${pois.length} hospitals and clinics`, 'success', 3000);
     })
     .catch(err => {
@@ -1303,6 +1305,7 @@ function fetchPOIs() {
             showNotification(`📵 Using cached data (${ageText} old) - ${pois.length} clinics`, 'info', 3000);
             renderPOIMarkers();
             if (lastKnownPosition) updatePediatriciansNearby(lastKnownPosition.lat, lastKnownPosition.lon);
+            flushPendingAutoRoute();
             return;
         }
         
@@ -1456,6 +1459,7 @@ function fetchPOIs() {
         cacheClinicData(pois);
         renderPOIMarkers();
         if (lastKnownPosition) updatePediatriciansNearby(lastKnownPosition.lat, lastKnownPosition.lon);
+        flushPendingAutoRoute();
     });
 }
 
@@ -2482,9 +2486,7 @@ async function useManualLocation(location) {
     console.log(`Manual location set: ${lat}, ${lon}`);
 
     // Auto-route to nearest clinic.
-    if (pois.length > 0) {
-        findAndRouteToNearestClinic(parseFloat(lat), parseFloat(lon));
-    }
+    requestAutoRouteNearest(parseFloat(lat), parseFloat(lon));
 }
 
 
@@ -2904,8 +2906,13 @@ function getAccurateLocation() {
         
         userAddress = `Your Location (±${accuracy.toFixed(0)}m accurate)`;
         updateUIAfterLocation(latitude, longitude);
+        if (pois && pois.length > 0) {
+            updatePediatriciansNearby(latitude, longitude);
+        }
         map.setView([latitude, longitude], 16);
-        
+
+        requestAutoRouteNearest(latitude, longitude);
+
         showNotification(`✅ Location Found! ${accuracyStatus}\n±${accuracy.toFixed(0)}m accuracy`, 'success', 4000);
         
         console.log(`📍 Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accuracy.toFixed(0)}m)`);
@@ -3361,6 +3368,22 @@ function toggleSidebar() {
         collapsedSidebar.style.display = 'none';
         if (toggleBtn) toggleBtn.style.transform = 'rotate(90deg)';
     }
+}
+
+function requestAutoRouteNearest(userLat, userLon) {
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) return;
+    if (pois && pois.length > 0) {
+        findAndRouteToNearestClinic(userLat, userLon);
+    } else {
+        pendingAutoRouteLocation = { lat: userLat, lon: userLon };
+    }
+}
+
+function flushPendingAutoRoute() {
+    if (!pendingAutoRouteLocation || !pois || pois.length === 0) return;
+    const { lat, lon } = pendingAutoRouteLocation;
+    pendingAutoRouteLocation = null;
+    findAndRouteToNearestClinic(lat, lon);
 }
 
 document.getElementById('toggle-sidebar')?.addEventListener('click', toggleSidebar);
