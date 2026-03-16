@@ -30,9 +30,27 @@ function isMobileViewport() {
     return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
 }
 
+function resetMobilePanelsOnLoad() {
+    if (!isMobileViewport()) return;
+    const leftPanel = document.getElementById('left-panel');
+    const infoPanel = document.getElementById('info-panel');
+    if (leftPanel) {
+        leftPanel.classList.remove('mobile-open');
+        leftPanel.style.left = '';
+    }
+    if (infoPanel) {
+        infoPanel.classList.remove('mobile-open');
+        infoPanel.style.right = '';
+    }
+    infoPanelOpenState = false;
+}
+
 window.addEventListener('resize', updateLayoutMetrics);
 window.addEventListener('orientationchange', updateLayoutMetrics);
-window.addEventListener('load', updateLayoutMetrics);
+window.addEventListener('load', () => {
+    updateLayoutMetrics();
+    resetMobilePanelsOnLoad();
+});
 setTimeout(updateLayoutMetrics, 50);
 if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(updateLayoutMetrics);
