@@ -3961,7 +3961,7 @@ function collectRecentChatHistory(messagesContainer) {
     return conversationHistory.slice(-6);
 }
 
-async function requestGeminiResponse(contentParts) {
+async function requestGeminiResponse(userInput) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -3969,7 +3969,7 @@ async function requestGeminiResponse(contentParts) {
         const response = await fetch('https://api.popebagarinao-scwa.workers.dev', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contentParts }),
+            body: JSON.stringify({ message: userInput }),
             signal: controller.signal
         });
 
@@ -4136,7 +4136,8 @@ Keep answers concise and actionable (2-5 short lines).${clinicContext ? `\n${cli
 
         contentParts.push({ text: cleanUserMessage });
 
-        const data = await requestGeminiResponse(contentParts);
+        const userInput = contentParts.map(part => part.text).filter(Boolean).join('\n\n');
+        const data = await requestGeminiResponse(userInput);
         const botResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received';
 
         // Remove typing indicator and add actual response
