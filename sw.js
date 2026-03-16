@@ -2,10 +2,10 @@
 // SERVICE WORKER - Offline Mode & Caching Strategy
 // ============================================================================
 
-const CACHE_NAME = 'pedi-locator-v1';
-const RUNTIME_CACHE = 'pedi-runtime-v1';
-const API_CACHE = 'pedi-api-v1';
-const IMAGE_CACHE = 'pedi-images-v1';
+const CACHE_NAME = 'pedi-locator-v2';
+const RUNTIME_CACHE = 'pedi-runtime-v2';
+const API_CACHE = 'pedi-api-v2';
+const IMAGE_CACHE = 'pedi-images-v2';
 
 const URLS_TO_CACHE = [
   '/',
