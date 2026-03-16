@@ -14,9 +14,29 @@ function updateTopbarHeightVar() {
     document.documentElement.style.setProperty('--topbar-height', `${height}px`);
 }
 
-window.addEventListener('resize', updateTopbarHeightVar);
-window.addEventListener('orientationchange', updateTopbarHeightVar);
-setTimeout(updateTopbarHeightVar, 50);
+function updateMobileBottomBarHeightVar() {
+    const bar = document.getElementById('sidebar-collapsed');
+    if (!bar) return;
+    const height = Math.max(48, bar.offsetHeight || 56);
+    document.documentElement.style.setProperty('--mobile-bottombar-height', `${height}px`);
+}
+
+function updateLayoutMetrics() {
+    updateTopbarHeightVar();
+    updateMobileBottomBarHeightVar();
+}
+
+function isMobileViewport() {
+    return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+}
+
+window.addEventListener('resize', updateLayoutMetrics);
+window.addEventListener('orientationchange', updateLayoutMetrics);
+window.addEventListener('load', updateLayoutMetrics);
+setTimeout(updateLayoutMetrics, 50);
+if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(updateLayoutMetrics);
+}
 
 function loadCinematicZoomPreference() {
     const stored = localStorage.getItem('cinematic-zoom');
@@ -651,19 +671,37 @@ function getDistance(lat1, lon1, lat2, lon2) {
 /**
  * Show notification toast
  */
+const activeNotifications = new Map();
 function showNotification(message, type = 'info', duration = 4000) {
     const container = document.getElementById('notification-container');
     if (!container) return;
 
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
+    const text = String(message ?? '');
+    const key = `${type}|${text}`;
+    let notification = activeNotifications.get(key);
 
-    container.appendChild(notification);
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = text;
+        notification.dataset.key = key;
+        container.appendChild(notification);
+        activeNotifications.set(key, notification);
+    } else {
+        notification.className = `notification ${type}`;
+        notification.textContent = text;
+        notification.classList.remove('removing');
+        if (notification._timeoutId) {
+            clearTimeout(notification._timeoutId);
+        }
+    }
 
-    setTimeout(() => {
+    notification._timeoutId = setTimeout(() => {
         notification.classList.add('removing');
-        setTimeout(() => notification.remove(), 300);
+        setTimeout(() => {
+            notification.remove();
+            activeNotifications.delete(key);
+        }, 300);
     }, duration);
 }
 
@@ -2519,6 +2557,7 @@ function startAutoGeolocation() {
     let bestAccuracy = Infinity;
     gpsStartTime = Date.now();
     let manualLocationTimeout = null;
+    let networkFallbackTimeout = null;
 
     const options = {
         enableHighAccuracy: true,   // Force real GPS (not IP)
@@ -2540,6 +2579,38 @@ function startAutoGeolocation() {
             showNotification('📍 GPS taking longer than expected. Enter your address to search nearby clinics...', 'info', 4000);
         }
     }, 20000);
+
+    // If GPS is slow on desktop, try a quick network-based fix to improve success rate
+    networkFallbackTimeout = setTimeout(() => {
+        if (gpsLockedIn || manualLocationUsed) return;
+        try {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    if (gpsLockedIn || manualLocationUsed) return;
+                    const { latitude, longitude, accuracy } = pos.coords;
+                    console.log(`📶 Network fallback location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accuracy.toFixed(0)}m)`);
+                    locationMode = 'network';
+                    userLocationAccuracy = accuracy;
+                    lastKnownPosition = { lat: latitude, lon: longitude };
+                    reverseGeocode(latitude, longitude).then(address => {
+                        userAddress = address;
+                        updateUIAfterLocation(latitude, longitude);
+                    });
+                    if (!window.mapCenteredOnUser) {
+                        map.setView([latitude, longitude], 14);
+                        window.mapCenteredOnUser = true;
+                    }
+                    showNotification('📶 Using network-based location while GPS locks...', 'info', 3000);
+                },
+                () => {
+                    // ignore - GPS may still lock
+                },
+                { enableHighAccuracy: false, maximumAge: 30000, timeout: 12000 }
+            );
+        } catch (e) {
+            // ignore
+        }
+    }, 8000);
 
     // Start continuous live tracking
     liveTrackingWatchId = navigator.geolocation.watchPosition(
@@ -2583,6 +2654,7 @@ function startAutoGeolocation() {
                 
                 // Clear the manual location timeout since we got GPS lock
                 if (manualLocationTimeout) clearTimeout(manualLocationTimeout);
+                if (networkFallbackTimeout) clearTimeout(networkFallbackTimeout);
                 
                 // Determine accuracy level
                 let accuracyLevel = 'Excellent GPS';
@@ -2751,97 +2823,117 @@ function getAccurateLocation() {
         timeout: 20000                // Give GPS 20 seconds to lock on satellites, then show manual option
     };
 
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            
-            const isGpsAccuracy = accuracy <= GPS_LOCK_ACCURACY_M;
-            const isNetworkAccuracy = accuracy > GPS_LOCK_ACCURACY_M && accuracy <= NETWORK_LOCATION_MAX_ACCURACY_M;
+    const fallbackOptions = {
+        enableHighAccuracy: false,
+        maximumAge: 15000,
+        timeout: 15000
+    };
 
-            // If accuracy is too poor, reject it.
-            if (!isGpsAccuracy && !isNetworkAccuracy) {
-                console.log(`⚠️ Rejected: Accuracy ${accuracy}m = too imprecise`);
-                
-                if (getLocBtn) {
-                    getLocBtn.textContent = '📡 Get My Location';
-                    getLocBtn.disabled = false;
-                }
-                
-                showNotification('❌ Location accuracy too low.\n\n✅ Tips:\n1. Go outdoors to open area\n2. Clear view of sky (no tall buildings)\n3. Wait 20-30 seconds for better lock\n4. Try again or use manual location', 'error', 6000);
-                return;
-            }
-            
-            userLocationAccuracy = accuracy;
-            gpsLockedIn = true;
-            locationMode = isGpsAccuracy ? 'gps' : 'network';
-            
-            // Accuracy: <30m = Real GPS | 30-100m = WiFi+GPS
-            let accuracyStatus = '✅ GPS (Highly Accurate)';
-            if (isNetworkAccuracy) {
-                accuracyStatus = '📶 Network Location (Approximate)';
-            } else if (accuracy > 30) {
-                accuracyStatus = '📶 WiFi+GPS (Good)';
-            }
-            
-            userAddress = `Your Location (±${accuracy.toFixed(0)}m accurate)`;
-            updateUIAfterLocation(latitude, longitude);
-            map.setView([latitude, longitude], 16);
-            
-            showNotification(`✅ Location Found! ${accuracyStatus}\n±${accuracy.toFixed(0)}m accuracy`, 'success', 4000);
-            
-            console.log(`📍 Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accuracy.toFixed(0)}m)`);
+    const handleSuccess = (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        
+        const isGpsAccuracy = accuracy <= GPS_LOCK_ACCURACY_M;
+        const isNetworkAccuracy = accuracy > GPS_LOCK_ACCURACY_M && accuracy <= NETWORK_LOCATION_MAX_ACCURACY_M;
+
+        // If accuracy is too poor, reject it.
+        if (!isGpsAccuracy && !isNetworkAccuracy) {
+            console.log(`⚠️ Rejected: Accuracy ${accuracy}m = too imprecise`);
             
             if (getLocBtn) {
                 getLocBtn.textContent = '📡 Get My Location';
                 getLocBtn.disabled = false;
             }
-        },
-        (error) => {
-            console.error('Geolocation error code:', error.code, error.message);
             
-            let errorMsg = '';
-            let errorTitle = '❌ Location Error: ';
-            
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    errorMsg = 'You blocked location access. Check your browser settings:\n' +
-                              '1. Click the lock icon next to the URL\n' +
-                              '2. Find "Location" and change to "Allow"\n' +
-                              '3. Reload the page';
-                    errorTitle = '🚫 Permission Denied: ';
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    errorMsg = 'GPS signal not found. This happens when:\n' +
-                              '• Indoors with no window view of sky\n' +
-                              '• Surrounded by tall buildings\n\n' +
-                              'Solution: Move outdoors to an open area with clear sky view.';
-                    errorTitle = '📡 GPS Not Available: ';
-                    break;
-                case error.TIMEOUT:
-                    errorMsg = 'GPS took too long (45+ seconds). This means:\n' +
-                              '• Weak GPS signal (indoors, urban canyon)\n' +
-                              '• Too many obstacles blocking sky view\n\n' +
-                              'Solution: Try moving to an open area or wait longer.';
-                    errorTitle = '⏱️ Timeout: ';
-                    break;
-                default:
-                    errorMsg = 'Unknown location error. Try refreshing the page.';
-            }
-            
-            showNotification(errorTitle + errorMsg, 'error', 5000);
-            
-            // Fallback to GenSan center
-            const lat = 6.1164;
-            const lon = 125.1716;
-            userAddress = "General Santos City (Using Default Location)";
-            updateUIAfterLocation(lat, lon);
-            map.setView([lat, lon], 14);
-            
-            if (getLocBtn) {
-                getLocBtn.textContent = '📡 Get My Location';
-                getLocBtn.disabled = false;
-            }
-        },
+            showNotification('❌ Location accuracy too low.\n\n✅ Tips:\n1. Go outdoors to open area\n2. Clear view of sky (no tall buildings)\n3. Wait 20-30 seconds for better lock\n4. Try again or use manual location', 'error', 6000);
+            return;
+        }
+        
+        userLocationAccuracy = accuracy;
+        gpsLockedIn = true;
+        locationMode = isGpsAccuracy ? 'gps' : 'network';
+        
+        // Accuracy: <30m = Real GPS | 30-100m = WiFi+GPS
+        let accuracyStatus = '✅ GPS (Highly Accurate)';
+        if (isNetworkAccuracy) {
+            accuracyStatus = '📶 Network Location (Approximate)';
+        } else if (accuracy > 30) {
+            accuracyStatus = '📶 WiFi+GPS (Good)';
+        }
+        
+        userAddress = `Your Location (±${accuracy.toFixed(0)}m accurate)`;
+        updateUIAfterLocation(latitude, longitude);
+        map.setView([latitude, longitude], 16);
+        
+        showNotification(`✅ Location Found! ${accuracyStatus}\n±${accuracy.toFixed(0)}m accuracy`, 'success', 4000);
+        
+        console.log(`📍 Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${accuracy.toFixed(0)}m)`);
+        
+        if (getLocBtn) {
+            getLocBtn.textContent = '📡 Get My Location';
+            getLocBtn.disabled = false;
+        }
+    };
+
+    const handleError = (error, triedFallback = false) => {
+        console.error('Geolocation error code:', error.code, error.message);
+
+        if (!triedFallback && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
+            showNotification('📶 Trying network-based location for better success...', 'info', 2500);
+            navigator.geolocation.getCurrentPosition(
+                handleSuccess,
+                (fallbackError) => handleError(fallbackError, true),
+                fallbackOptions
+            );
+            return;
+        }
+        
+        let errorMsg = '';
+        let errorTitle = '❌ Location Error: ';
+        
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                errorMsg = 'You blocked location access. Check your browser settings:\n' +
+                          '1. Click the lock icon next to the URL\n' +
+                          '2. Find "Location" and change to "Allow"\n' +
+                          '3. Reload the page';
+                errorTitle = '🚫 Permission Denied: ';
+                break;
+            case error.POSITION_UNAVAILABLE:
+                errorMsg = 'GPS signal not found. This happens when:\n' +
+                          '• Indoors with no window view of sky\n' +
+                          '• Surrounded by tall buildings\n\n' +
+                          'Solution: Move outdoors to an open area with clear sky view.';
+                errorTitle = '📡 GPS Not Available: ';
+                break;
+            case error.TIMEOUT:
+                errorMsg = 'GPS took too long (45+ seconds). This means:\n' +
+                          '• Weak GPS signal (indoors, urban canyon)\n' +
+                          '• Too many obstacles blocking sky view\n\n' +
+                          'Solution: Try moving to an open area or wait longer.';
+                errorTitle = '⏱️ Timeout: ';
+                break;
+            default:
+                errorMsg = 'Unknown location error. Try refreshing the page.';
+        }
+        
+        showNotification(errorTitle + errorMsg, 'error', 5000);
+        
+        // Fallback to GenSan center
+        const lat = 6.1164;
+        const lon = 125.1716;
+        userAddress = "General Santos City (Using Default Location)";
+        updateUIAfterLocation(lat, lon);
+        map.setView([lat, lon], 14);
+        
+        if (getLocBtn) {
+            getLocBtn.textContent = '📡 Get My Location';
+            getLocBtn.disabled = false;
+        }
+    };
+
+    navigator.geolocation.getCurrentPosition(
+        handleSuccess,
+        (error) => handleError(error, false),
         options
     );
 }
@@ -3201,6 +3293,21 @@ function toggleSidebar() {
     const collapsedSidebar = document.getElementById('sidebar-collapsed');
     const toggleBtn = document.getElementById('toggle-sidebar');
     
+    if (isMobileViewport()) {
+        sidebar.style.left = '';
+        const isOpen = sidebar.classList.contains('mobile-open');
+        if (isOpen) {
+            sidebar.classList.remove('mobile-open');
+        } else {
+            sidebar.classList.add('mobile-open');
+            closeInfoPanel();
+        }
+        if (collapsedSidebar) collapsedSidebar.style.display = 'flex';
+        if (toggleBtn) toggleBtn.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+        updateLayoutMetrics();
+        return;
+    }
+
     if (sidebar.style.left === '0px') {
         // Close sidebar - show collapsed version
         sidebar.style.left = '-320px';
@@ -3216,6 +3323,14 @@ function toggleSidebar() {
 
 document.getElementById('toggle-sidebar')?.addEventListener('click', toggleSidebar);
 document.getElementById('sidebar-close')?.addEventListener('click', toggleSidebar);
+document.getElementById('mobile-live-tracking-btn')?.addEventListener('click', toggleSidebar);
+document.getElementById('mobile-route-info-btn')?.addEventListener('click', () => {
+    if (infoPanelOpenState) {
+        closeInfoPanel();
+    } else {
+        openInfoPanel();
+    }
+});
 
 // ============================================================================
 // ABOUT MODAL
@@ -3602,8 +3717,13 @@ const WEBSITE_RELATED_KEYWORDS = [
 function closeInfoPanel() {
     const infoPanel = document.getElementById('info-panel');
     if (infoPanel) {
-        infoPanel.style.right = '-340px';
-        infoPanel.classList.add('hover-disabled');
+        if (isMobileViewport()) {
+            infoPanel.classList.remove('mobile-open');
+            infoPanel.style.right = '';
+        } else {
+            infoPanel.style.right = '-340px';
+            infoPanel.classList.add('hover-disabled');
+        }
         infoPanelOpenState = false;
     }
 }
@@ -3613,9 +3733,17 @@ function closeInfoPanel() {
  */
 function openInfoPanel() {
     const infoPanel = document.getElementById('info-panel');
+    const leftPanel = document.getElementById('left-panel');
     if (infoPanel) {
-        infoPanel.style.right = '0';
-        infoPanel.classList.remove('hover-disabled');
+        if (isMobileViewport()) {
+            infoPanel.classList.add('mobile-open');
+            infoPanel.style.right = '';
+            if (leftPanel) leftPanel.classList.remove('mobile-open');
+            infoPanel.classList.remove('hover-disabled');
+        } else {
+            infoPanel.style.right = '0';
+            infoPanel.classList.remove('hover-disabled');
+        }
         infoPanelOpenState = true;
         // Close chatbot when opening info panel
         closeChatbot();
@@ -3638,6 +3766,10 @@ function closeChatbot() {
     if (toggleBtn) {
         toggleBtn.style.transform = 'scale(1)';
     }
+    if (isMobileViewport()) {
+        document.body.classList.remove('chatbot-open');
+        updateLayoutMetrics();
+    }
     // Re-enable hover for info panel
     if (infoPanel) {
         infoPanel.classList.remove('hover-disabled');
@@ -3652,6 +3784,7 @@ function openChatbot() {
     const toggleBtn = document.getElementById('chatbot-toggle');
     const input = document.getElementById('chatbot-input');
     const infoPanel = document.getElementById('info-panel');
+    const leftPanel = document.getElementById('left-panel');
     if (chatWindow) {
         chatWindow.style.visibility = 'visible';
         chatWindow.style.opacity = '1';
@@ -3666,6 +3799,11 @@ function openChatbot() {
     }
     if (toggleBtn) {
         toggleBtn.style.transform = 'scale(1.1)';
+    }
+    if (isMobileViewport()) {
+        document.body.classList.add('chatbot-open');
+        if (leftPanel) leftPanel.classList.remove('mobile-open');
+        updateLayoutMetrics();
     }
     if (input) {
         input.focus();
