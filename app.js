@@ -3737,7 +3737,7 @@ async function requestGeminiResponse(contentParts) {
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
-        const response = await fetch('https://<your-subdomain>.workers.dev', {
+        const response = await fetch('https://api.popebagarinao-scwa.workers.dev', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contentParts }),
