@@ -21,9 +21,32 @@ function updateMobileBottomBarHeightVar() {
     document.documentElement.style.setProperty('--mobile-bottombar-height', `${height}px`);
 }
 
+function updateMobilePanelHeightVar() {
+    if (!isMobileViewport()) {
+        document.documentElement.style.setProperty('--panel-mobile-height', '0px');
+        document.body.classList.remove('panel-open');
+        return;
+    }
+    const leftPanel = document.getElementById('left-panel');
+    const infoPanel = document.getElementById('info-panel');
+    let height = 0;
+    if (leftPanel && leftPanel.classList.contains('mobile-open')) {
+        height = leftPanel.offsetHeight || 0;
+    } else if (infoPanel && infoPanel.classList.contains('mobile-open')) {
+        height = infoPanel.offsetHeight || 0;
+    }
+    document.documentElement.style.setProperty('--panel-mobile-height', `${Math.max(0, height)}px`);
+    if (height > 0) {
+        document.body.classList.add('panel-open');
+    } else {
+        document.body.classList.remove('panel-open');
+    }
+}
+
 function updateLayoutMetrics() {
     updateTopbarHeightVar();
     updateMobileBottomBarHeightVar();
+    updateMobilePanelHeightVar();
 }
 
 function isMobileViewport() {
@@ -43,6 +66,7 @@ function resetMobilePanelsOnLoad() {
         infoPanel.style.right = '';
     }
     infoPanelOpenState = false;
+    updateMobilePanelHeightVar();
 }
 
 window.addEventListener('resize', updateLayoutMetrics);
@@ -3738,6 +3762,7 @@ function closeInfoPanel() {
         if (isMobileViewport()) {
             infoPanel.classList.remove('mobile-open');
             infoPanel.style.right = '';
+            updateMobilePanelHeightVar();
         } else {
             infoPanel.style.right = '-340px';
             infoPanel.classList.add('hover-disabled');
@@ -3758,6 +3783,7 @@ function openInfoPanel() {
             infoPanel.style.right = '';
             if (leftPanel) leftPanel.classList.remove('mobile-open');
             infoPanel.classList.remove('hover-disabled');
+            updateMobilePanelHeightVar();
         } else {
             infoPanel.style.right = '0';
             infoPanel.classList.remove('hover-disabled');
