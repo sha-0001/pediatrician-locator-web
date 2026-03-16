@@ -1,8 +1,9 @@
-
+ 
 :root {
     --topbar-height: 56px;
     --mobile-bottombar-height: 56px;
     --chatbot-mobile-height: 0px;
+    --panel-mobile-height: 0px;
 }
 
 body {
@@ -2091,7 +2092,7 @@ body.dark-mode .btn-secondary:hover {
         top: auto;
         bottom: var(--mobile-bottombar-height);
         height: auto;
-        max-height: 60dvh;
+        max-height: 48dvh;
         overflow-y: auto;
         transform: translateY(100%);
         transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2135,7 +2136,7 @@ body.dark-mode .btn-secondary:hover {
         top: auto;
         border-left: none;
         border-top: 1px solid #e0e0e0;
-        max-height: 50dvh;
+        max-height: 42dvh;
         overflow-y: auto;
         transform: translateY(100%);
         transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2213,7 +2214,7 @@ body.dark-mode .btn-secondary:hover {
 
     /* Map container full height on mobile */
     #map {
-        bottom: var(--mobile-bottombar-height);
+        bottom: calc(var(--mobile-bottombar-height) + var(--panel-mobile-height));
         height: auto;
     }
 
@@ -2222,7 +2223,7 @@ body.dark-mode .btn-secondary:hover {
     }
 
     body.chatbot-open #map {
-        bottom: calc(var(--mobile-bottombar-height) + var(--chatbot-mobile-height));
+        bottom: calc(var(--mobile-bottombar-height) + var(--chatbot-mobile-height) + var(--panel-mobile-height));
     }
 
     /* Prevent zoom on input focus (iOS) */
@@ -2306,7 +2307,7 @@ body.dark-mode .btn-secondary:hover {
         }
 
         #map {
-            bottom: var(--mobile-bottombar-height);
+            bottom: calc(var(--mobile-bottombar-height) + var(--panel-mobile-height));
             height: auto;
         }
 
