@@ -162,13 +162,13 @@ let isLiveTracking = false; // Toggle for live tracking
 let gpsLockedIn = false; // Has GPS achieved a lock?
 let manualLocationUsed = false; // Did user use manual location?
 let gpsStartTime = null; // Track when GPS acquisition started
-let locationMode = 'unknown'; // 'gps' | 'network' | 'manual' | 'unknown'
+let locationMode = 'unknown'; // 'gps' | 'manual' | 'unknown'
 let ignorePositionJump = false; // Allow first GPS fix after switching modes
 let cinematicZoomEnabled = true;
 let pendingAutoRouteLocation = null; // { lat, lon } when clinics not loaded yet
 
 const GPS_LOCK_ACCURACY_M = 100; // Real GPS typically < 100m
-const NETWORK_LOCATION_MAX_ACCURACY_M = 1200; // Allow WiFi/cell-based location
+const NETWORK_LOCATION_MAX_ACCURACY_M = 1200; // (deprecated) retained for legacy configs
 
 // ============================================================================
 // OFFLINE MODE & CACHING FEATURES
@@ -589,6 +589,41 @@ function getCoordinatesFromDatabase(locationName) {
         }
     }
     
+    return null;
+}
+
+function normalizeLocationText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/\b(subdivision|subd\.?|subd|village|brgy\.?|barangay)\b/g, ' ')
+        .replace(/\b(heights?)\b/g, 'heights')
+        .replace(/\b(phases?|phase|ph\.?)\b/g, 'phase')
+        .replace(/\b(block|blk|lot)\b/g, ' ')
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function resolveManualLocationAlias(query) {
+    const normalized = normalizeLocationText(query);
+    if (!normalized) return null;
+
+    const hasVsm = /\bvsm\b/.test(normalized);
+    if (hasVsm) {
+        const phaseMatch = normalized.match(/\bphase\s*(\d+|i|ii|iii)\b/);
+        let phase = phaseMatch ? phaseMatch[1] : null;
+        if (phase) {
+            if (phase === 'i') phase = '1';
+            if (phase === 'ii') phase = '2';
+            if (phase === 'iii') phase = '3';
+        }
+
+        if (phase === '1') return 'VSM 1 Heights Phase 1';
+        if (phase === '2') return 'VSM 1 Heights Phase 2';
+        if (normalized.includes('heights') && normalized.includes('1')) return 'VSM 1';
+        return 'VSM';
+    }
+
     return null;
 }
 
@@ -2249,6 +2284,36 @@ async function geocodeManualLocation(query) {
                 type: dbCoords.type,
                 _manualScore: 999,
                 _manualSource: 'local-database'
+            }];
+        }
+
+        // ========== OPTION 1B: LOCAL ALIASES (VSM + COMMON VARIANTS) ==========
+        const aliasKey = resolveManualLocationAlias(query);
+        if (aliasKey && LOCATION_COORDINATES[aliasKey]) {
+            const aliasCoords = LOCATION_COORDINATES[aliasKey];
+            console.log(`✅ Resolved alias "${query}" -> ${aliasKey}`, aliasCoords);
+            return [{
+                lat: aliasCoords.lat.toString(),
+                lon: aliasCoords.lon.toString(),
+                display_name: aliasKey,
+                type: aliasCoords.type,
+                _manualScore: 980,
+                _manualSource: 'local-alias'
+            }];
+        }
+
+        // ========== OPTION 1C: LOCAL PARTIAL MATCH (PRIORITY FOR SUBDIVISIONS) ==========
+        const localPriority = /\b(vsm|subdivision|subd|phase|heights|village|barangay|brgy)\b/i.test(String(query || ''));
+        const localMatch = localPriority ? findAreaCoordinatesFromManualText(query) : null;
+        if (localMatch) {
+            console.log(`✅ Local partial match for "${query}": ${localMatch.name}`, localMatch);
+            return [{
+                lat: localMatch.lat.toString(),
+                lon: localMatch.lon.toString(),
+                display_name: localMatch.name || query,
+                type: localMatch.type,
+                _manualScore: 900,
+                _manualSource: 'local-partial'
             }];
         }
         
