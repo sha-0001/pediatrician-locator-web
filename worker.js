@@ -7,6 +7,16 @@ export default {
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
+    const jsonResponse = (body, status = 200) => {
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders
+        }
+      });
+    };
+
     // Handle preflight (CORS)
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
@@ -31,7 +41,7 @@ export default {
       const { message } = await request.json();
 
       const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: {
@@ -49,17 +59,20 @@ export default {
         }
       );
 
-      const data = await geminiResponse.json();
+      if (!geminiResponse.ok) {
+        const errText = await geminiResponse.text();
+        return jsonResponse({ error: errText }, 500);
+      }
 
-      return new Response(
-        JSON.stringify(data),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders
-          }
-        }
-      );
+      const data = await geminiResponse.json();
+      console.log(JSON.stringify(data, null, 2));
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!reply) {
+        return jsonResponse({ error: "No response received" }, 500);
+      }
+
+      return jsonResponse({ text: reply });
 
     } catch (error) {
 
