@@ -50,7 +50,7 @@ function updateLayoutMetrics() {
 }
 
 function isMobileViewport() {
-    return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    return window.matchMedia && window.matchMedia('(max-width: 1024px)').matches;
 }
 
 function resetMobilePanelsOnLoad() {
@@ -3484,6 +3484,18 @@ document.getElementById('mobile-route-info-btn')?.addEventListener('click', () =
     } else {
         openInfoPanel();
     }
+});
+document.getElementById('info-panel-close')?.addEventListener('click', closeInfoPanel);
+
+const panelBackdrop = document.getElementById('panel-backdrop');
+panelBackdrop?.addEventListener('click', () => {
+    if (!isMobileViewport()) return;
+    const leftPanel = document.getElementById('left-panel');
+    if (leftPanel && leftPanel.classList.contains('mobile-open')) {
+        leftPanel.classList.remove('mobile-open');
+    }
+    closeInfoPanel();
+    updateLayoutMetrics();
 });
 
 // ============================================================================
