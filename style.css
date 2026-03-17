@@ -1049,6 +1049,24 @@ body.dark-mode .search-suggestion-item:hover {
     bottom: 0;
 }
 
+#panel-backdrop {
+    position: fixed;
+    top: var(--topbar-height);
+    left: 0;
+    right: 0;
+    bottom: var(--mobile-bottombar-height);
+    background: rgba(0, 0, 0, 0.08);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 900;
+}
+
+body.panel-open #panel-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 /* zoom controls - positioned to avoid overlapping with sidebar */
 .zoom-controls {
     position: absolute;
@@ -1102,8 +1120,41 @@ body.dark-mode .search-suggestion-item:hover {
 }
 
 #info-panel h4 {
-    margin: 0 0 15px 0;
+    margin: 0;
     font-size: 18px;
+}
+
+.right-panel .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.panel-close {
+    border: none;
+    background: transparent;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+.panel-close:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+body.dark-mode .panel-close {
+    color: #bbb;
+}
+
+body.dark-mode .panel-close:hover {
+    background: #2a2a2a;
+    color: #fff;
 }
 
 #route-summary {
@@ -1186,20 +1237,6 @@ body.dark-mode .search-suggestion-item:hover {
 
 /* responsive */
 @media (max-width: 900px) {
-    .sidebar, .right-panel {
-        position: relative;
-        width: 100%;
-        left: 0;
-        right: 0;
-        height: auto;
-        max-height: 50vh;
-    }
-    .sidebar-collapsed {
-        top: var(--topbar-height);
-        height: calc(100vh - var(--topbar-height));
-        height: -webkit-fill-available;
-        height: fill-available;
-    }
     .panel-content {
         overflow-y: auto;
     }
@@ -2045,7 +2082,7 @@ body.dark-mode .btn-secondary:hover {
 }
 
 /* Mobile-first responsive design */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     /* Adjust topbar for mobile */
     .topbar {
         padding: 10px 8px;
@@ -2382,7 +2419,7 @@ body.dark-mode .btn-secondary:hover {
 }
 
 /* Dark mode mobile adjustments */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     body.dark-mode .sidebar,
     body.dark-mode .right-panel,
     body.dark-mode .clinic-panel,
@@ -2595,7 +2632,7 @@ body.dark-mode #route-summary {
 }
 
 /* Mobile: disable title element tooltips, keep browser default */
-@media (hover: none) and (pointer: coarse), (max-width: 768px) {
+@media (hover: none) and (pointer: coarse), (max-width: 1024px) {
     button[title]::after,
     button[title]::before,
     a[title]::after,
