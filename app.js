@@ -4058,12 +4058,16 @@ async function requestGeminiResponse(userInput) {
         }
 
         const data = await response.json();
-        console.log('Gemini response:', data?.text ?? data);
+        const reply = data?.reply ?? data?.text ?? data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        if (!reply) {
+            console.log('FULL RESPONSE:', data);
+            throw new Error('No response received');
+        }
+        console.log('Gemini response:', reply);
 
-        const text = data?.text || '';
         return {
             candidates: [
-                { content: { parts: [{ text }] } }
+                { content: { parts: [{ text: reply }] } }
             ]
         };
     } catch (error) {
