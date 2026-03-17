@@ -159,6 +159,7 @@
     <div id="map">
         <div id="loading">Loading map...</div>
     </div>
+    <div id="panel-backdrop" aria-hidden="true"></div>
 
     <!-- Notification container -->
     <div id="notification-container" class="notification-container"></div>
@@ -209,7 +210,10 @@
     <!-- info panel (right, slide-in) -->
     <aside id="info-panel" class="right-panel">
         <div class="panel-content">
-            <h4>Route & Info</h4>
+            <div class="panel-header">
+                <h4>Route & Info</h4>
+                <button id="info-panel-close" class="panel-close" title="Close panel">×</button>
+            </div>
             <div id="route-summary">Waiting for location...</div>
             
             <!-- Emergency Call Button -->
