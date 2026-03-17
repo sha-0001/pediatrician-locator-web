@@ -4038,6 +4038,21 @@ function collectRecentChatHistory(messagesContainer) {
     return conversationHistory.slice(-6);
 }
 
+function getErrorMessage(err) {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message || String(err);
+    if (typeof err === 'object') {
+        if (typeof err.message === 'string' && err.message.trim()) return err.message;
+        try {
+            return JSON.stringify(err);
+        } catch (e) {
+            return String(err);
+        }
+    }
+    return String(err);
+}
+
 async function requestGeminiResponse(userInput) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -4069,7 +4084,7 @@ async function requestGeminiResponse(userInput) {
         }
 
         if (data && typeof data === 'object' && data.error) {
-            throw new Error(data.error);
+            throw new Error(getErrorMessage(data.error));
         }
 
         const reply = data?.reply ?? data?.text ?? data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
@@ -4090,7 +4105,7 @@ async function requestGeminiResponse(userInput) {
             throw new Error('Request timed out. Please try again.');
         }
         console.error('Fetch error:', error);
-        throw error;
+        throw new Error(getErrorMessage(error));
     }
 }
 
@@ -4242,7 +4257,7 @@ Keep answers concise and actionable (2-5 short lines).${clinicContext ? `\n${cli
     } catch (error) {
         console.error('Chatbot error:', error);
         removeLastMessage();
-        addChatMessage(`Connection/API error: ${error.message || 'Please try again.'}`, 'error');
+        addChatMessage(`Connection/API error: ${getErrorMessage(error)}`, 'error');
         addSuggestedPrompts('Try these website prompts while troubleshooting:');
     }
 }
