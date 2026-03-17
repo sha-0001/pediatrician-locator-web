@@ -4067,10 +4067,15 @@ async function requestGeminiResponse(userInput) {
             console.error("Invalid JSON:", e);
             throw new Error('Invalid JSON response');
         }
+
+        if (data && typeof data === 'object' && data.error) {
+            throw new Error(data.error);
+        }
+
         const reply = data?.reply ?? data?.text ?? data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
         if (!reply) {
             console.log('FULL RESPONSE:', data);
-            throw new Error('No response received');
+            throw new Error('No response received from server');
         }
         console.log('Gemini response:', reply);
 
