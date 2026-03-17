@@ -4052,12 +4052,21 @@ async function requestGeminiResponse(userInput) {
 
         clearTimeout(timeoutId);
 
+        console.log("Response status:", response.status);
+        const text = await response.text();
+        console.log("Raw response:", text);
+
         if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errText}`);
+            throw new Error(`HTTP ${response.status}: ${text}`);
         }
 
-        const data = await response.json();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error("Invalid JSON:", e);
+            throw new Error('Invalid JSON response');
+        }
         const reply = data?.reply ?? data?.text ?? data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
         if (!reply) {
             console.log('FULL RESPONSE:', data);
