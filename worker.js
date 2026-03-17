@@ -72,7 +72,7 @@ export default {
         return jsonResponse({ error: "No response received" }, 500);
       }
 
-      return jsonResponse({ text: reply });
+      return jsonResponse({ reply });
 
     } catch (error) {
 
