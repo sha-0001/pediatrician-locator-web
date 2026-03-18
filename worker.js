@@ -65,7 +65,7 @@ try {
 
       const listModels = async () => {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1/models?key=${env.GEMINI_API_KEY}`,
           { method: "GET" }
         );
 
@@ -190,7 +190,7 @@ try {
       for (const method of methodsToTry) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/${normalizedModel}:${method}?key=${env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1/${normalizedModel}:${method}?key=${env.GEMINI_API_KEY}`,
             {
               method: "POST",
               headers: {
