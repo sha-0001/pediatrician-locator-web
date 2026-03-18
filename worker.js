@@ -7,7 +7,7 @@ export default {
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
-    const DEFAULT_MODEL = "";
+    const DEFAULT_MODEL = "gemini-1.5-flash-latest";
 
     const jsonResponse = (body, status = 200) => {
       return new Response(JSON.stringify(body), {
@@ -34,17 +34,17 @@ export default {
         return jsonResponse({ error: "Missing GEMINI_API_KEY" }, 500);
       }
 
-     const raw = await request.text();
-let body = {};
+      const raw = await request.text();
+      let body = {};
 
-try {
-  body = JSON.parse(raw);
-} catch (e) {
-  return jsonResponse({
-    error: "Invalid JSON",
-    rawReceived: raw
-  }, 400);
-}
+      try {
+        body = JSON.parse(raw);
+      } catch (e) {
+        return jsonResponse({
+          error: "Invalid JSON",
+          rawReceived: raw
+        }, 400);
+      }
       const action = String(body?.action || "").trim().toLowerCase();
       const listModelsRequested = action === "listmodels" || body?.listModels === true;
 
@@ -58,9 +58,10 @@ try {
       };
 
       const normalizeModel = (value) => {
-        const raw = String(value || "").trim();
+        let raw = String(value || "").trim();
         if (!raw) return "";
-        return raw.startsWith("models/") ? raw : `models/${raw}`;
+        raw = raw.replace(/^models\//, "");
+        return `models/${raw}`;
       };
 
       const listModels = async () => {
@@ -154,34 +155,27 @@ try {
 
       if (!normalizedModel) {
         const result = await listModels();
-        if (!result.ok) {
-          return jsonResponse({
-            error: result.errorText || "Unable to list models for fallback selection.",
-            hint: "Provide a model in the request body (model) or set GEMINI_MODEL in the environment."
-          }, 502);
-        }
+        if (result.ok) {
+          const models = result.models || [];
+          const preferred = models.find(model => Array.isArray(model?.supportedMethods) && model.supportedMethods.includes("generateContent"))
+            || models.find(model => Array.isArray(model?.supportedMethods) && model.supportedMethods.includes("generateText"))
+            || models[0];
 
-        const models = result.models || [];
-        if (!models.length) {
-          return jsonResponse({
-            error: "No models available for generateText or generateContent.",
-            hint: "Ensure the Gemini API is enabled and the API key has access."
-          }, 502);
-        }
+          requestedModel = preferred?.name || "";
+          normalizedModel = normalizeModel(requestedModel);
 
-        const preferred = models.find(model => Array.isArray(model?.supportedMethods) && model.supportedMethods.includes("generateContent"))
-          || models.find(model => Array.isArray(model?.supportedMethods) && model.supportedMethods.includes("generateText"))
-          || models[0];
-
-        requestedModel = preferred?.name || "";
-        normalizedModel = normalizeModel(requestedModel);
-
-        if (!requestedMethod && Array.isArray(preferred?.supportedMethods)) {
-          if (preferred.supportedMethods.includes("generateContent")) {
-            requestedMethod = "generateContent";
-          } else if (preferred.supportedMethods.includes("generateText")) {
-            requestedMethod = "generateText";
+          if (!requestedMethod && Array.isArray(preferred?.supportedMethods)) {
+            if (preferred.supportedMethods.includes("generateContent")) {
+              requestedMethod = "generateContent";
+            } else if (preferred.supportedMethods.includes("generateText")) {
+              requestedMethod = "generateText";
+            }
           }
+        }
+
+        if (!normalizedModel) {
+          requestedModel = DEFAULT_MODEL;
+          normalizedModel = normalizeModel(requestedModel);
         }
       }
 
@@ -190,7 +184,7 @@ try {
       for (const method of methodsToTry) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1/${normalizedModel}:${method}?key=${env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/${normalizedModel}:${method}?key=${env.GEMINI_API_KEY}`,
             {
               method: "POST",
               headers: {
