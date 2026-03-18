@@ -29,6 +29,7 @@ export default {
 
     try {
       if (!env?.GEMINI_API_KEY) {
+        console.log("❌ Missing GEMINI_API_KEY");
         return jsonResponse({ error: "Missing GEMINI_API_KEY" }, 500);
       }
 
@@ -84,13 +85,16 @@ export default {
           }
         );
 
+        console.log("Status:", geminiResponse.status);
+
         if (!geminiResponse.ok) {
           lastErrorText = await geminiResponse.text();
+          console.log("Gemini Error:", lastErrorText);
           if (geminiResponse.status >= 500 || geminiResponse.status === 429) {
             await sleep(350 * (attempt + 1));
             continue;
           }
-          return jsonResponse({ error: lastErrorText }, 500);
+          return jsonResponse({ error: lastErrorText }, geminiResponse.status);
         }
 
         const data = await geminiResponse.json();
@@ -114,10 +118,11 @@ export default {
       }
 
       return jsonResponse({
-        reply: "Gemini returned no text. Please try again or rephrase your question."
-      });
+        error: "Gemini returned no valid response. Try again."
+      }, 502);
 
     } catch (err) {
+      console.log("❌ Fetch Error:", err);
       return jsonResponse({ error: err?.message || String(err) }, 500);
     }
 
