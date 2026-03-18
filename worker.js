@@ -34,7 +34,17 @@ export default {
         return jsonResponse({ error: "Missing GEMINI_API_KEY" }, 500);
       }
 
-      const body = await request.json().catch(() => ({}));
+     const raw = await request.text();
+let body = {};
+
+try {
+  body = JSON.parse(raw);
+} catch (e) {
+  return jsonResponse({
+    error: "Invalid JSON",
+    rawReceived: raw
+  }, 400);
+}
       const action = String(body?.action || "").trim().toLowerCase();
       const listModelsRequested = action === "listmodels" || body?.listModels === true;
 
