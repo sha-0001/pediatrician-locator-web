@@ -164,7 +164,7 @@ export default {
           requestedModel = preferred?.name || "";
           normalizedModel = normalizeModel(requestedModel);
 
-          if (!requestedMethod && Array.isArray(preferred?.supportedMethods)) {
+          if (!requestedMethod && Array.isArray(preferred?.supportedGenerationMethods)) {
             if (preferred.supportedGenerationMethods.includes("generateContent")) {
               requestedMethod = "generateContent";
             } else if (preferred.supportedMethods.includes("generateText")) {
