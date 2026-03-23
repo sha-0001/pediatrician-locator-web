@@ -45,6 +45,7 @@ export default {
           rawReceived: raw
         }, 400);
       }
+
       const action = String(body?.action || "").trim().toLowerCase();
       const listModelsRequested = action === "listmodels" || body?.listModels === true;
 
@@ -78,7 +79,7 @@ export default {
         const data = await response.json();
         const models = Array.isArray(data?.models) ? data.models : [];
         const filtered = models.filter(model => {
-          const methods = model?.supportedGenerationMethods;
+          const methods = model?.supportedGenerationMethods; // ✅ fixed
           return Array.isArray(methods) && methods.some(m => m === "generateContent" || m === "generateText");
         });
 
@@ -157,17 +158,18 @@ export default {
         const result = await listModels();
         if (result.ok) {
           const models = result.models || [];
-          const preferred = models.find(model => Array.isArray(model?.supportedMethods) && model.supportedMethods.includes("generateContent"))
-            || models.find(model => Array.isArray(model?.supportedMethods) && model.supportedMethods.includes("generateText"))
+          // ✅ all 3 fixed below
+          const preferred = models.find(model => Array.isArray(model?.supportedGenerationMethods) && model.supportedGenerationMethods.includes("generateContent"))
+            || models.find(model => Array.isArray(model?.supportedGenerationMethods) && model.supportedGenerationMethods.includes("generateText"))
             || models[0];
 
           requestedModel = preferred?.name || "";
           normalizedModel = normalizeModel(requestedModel);
 
-          if (!requestedMethod && Array.isArray(preferred?.supportedGenerationMethods)) {
-            if (preferred.supportedGenerationMethods.includes("generateContent")) {
+          if (!requestedMethod && Array.isArray(preferred?.supportedGenerationMethods)) { // ✅ fixed
+            if (preferred.supportedGenerationMethods.includes("generateContent")) { // ✅ fixed
               requestedMethod = "generateContent";
-            } else if (preferred.supportedMethods.includes("generateText")) {
+            } else if (preferred.supportedGenerationMethods.includes("generateText")) { // ✅ fixed
               requestedMethod = "generateText";
             }
           }
