@@ -7,7 +7,7 @@ export default {
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
-    const DEFAULT_MODEL = "gemini-2.0-flash-lite";
+    const DEFAULT_MODEL = "gemini-2.0-flash";
 
     const jsonResponse = (body, status = 200) => {
       return new Response(JSON.stringify(body), {
