@@ -7,7 +7,7 @@ export default {
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
-    const DEFAULT_MODEL = "gemini-1.5-flash-latest";
+    const DEFAULT_MODEL = "gemini-2.0-flash";
 
     const jsonResponse = (body, status = 200) => {
       return new Response(JSON.stringify(body), {
@@ -184,7 +184,7 @@ export default {
       for (const method of methodsToTry) {
         for (let attempt = 0; attempt < 2; attempt++) {
           const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/${normalizedModel}:${method}?key=${env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1/${normalizedModel}:${method}?key=${env.GEMINI_API_KEY}`,
             {
               method: "POST",
               headers: {
