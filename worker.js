@@ -78,7 +78,7 @@ export default {
         const data = await response.json();
         const models = Array.isArray(data?.models) ? data.models : [];
         const filtered = models.filter(model => {
-          const methods = model?.supportedMethods;
+          const methods = model?.supportedGenerationMethods;
           return Array.isArray(methods) && methods.some(m => m === "generateContent" || m === "generateText");
         });
 
@@ -165,7 +165,7 @@ export default {
           normalizedModel = normalizeModel(requestedModel);
 
           if (!requestedMethod && Array.isArray(preferred?.supportedMethods)) {
-            if (preferred.supportedMethods.includes("generateContent")) {
+            if (preferred.supportedGenerationMethods.includes("generateContent")) {
               requestedMethod = "generateContent";
             } else if (preferred.supportedMethods.includes("generateText")) {
               requestedMethod = "generateText";
